@@ -32,7 +32,7 @@ def get_comment_ids_of_submission(submission_id):
     return comment_ids
 
 # Scrapping parameters
-submission_to_crawl = 10
+submission_to_crawl = 1000000
 #days_to_crawl = 7
 #after=(datetime.now() - timedelta(days=days_to_crawl)).timestamp()
 
@@ -53,19 +53,23 @@ comments_params = dict(
 #filter_comments = ['id', 'author', 'score', 'body', 'parent_id']
 
 # Save directory
-output_dir = 'database_{:d}'.format(before)
+#output_dir = 'database_{:d}'.format(before)
+output_dir = 'H:\\reddit\\' + 'database_{:d}'.format(before)
 images_dir = join(output_dir, 'images')
 comments_dir = join(output_dir, 'comments')
 Path(images_dir).mkdir(parents=True, exist_ok=True)
 Path(comments_dir).mkdir(parents=True, exist_ok=True)
 
-# Save all scrapped submissions in this list
-submissions_lst = []
+scrapped = 0
 
 while True:
-    print('Scrapped {:d}/{:d} submissions...'.format(len(submissions_lst), submission_to_crawl))
+    print('Scrapped {:d}/{:d} submissions...'.format(scrapped, submission_to_crawl))
+    # Save all scrapped submissions in this list
+    submissions_lst = []
     submissions = get_submissions(before=before, **submissions_params)
-    if not submissions: break
+    if not submissions: 
+        print('No submissions left!')     
+        exit()
 
     for s in submissions:
         #print(s)
@@ -77,13 +81,16 @@ while True:
         elif '.jpg' in image_url or '.jpeg' in image_url:
             extension = '.jpeg'
         elif 'imgur' in image_url and not '.gifv' in image_url:
-            image_url += '.jpg'
+            if not '.jpg' in image_url:
+                image_url = image_url.replace('imgur', 'i.imgur')
+                image_url += '.jpg'
             extension = '.jpeg'
+            print(image_url)
         else:
             continue
 
         # TODO: Async
-        r = requests.get(s['url'])
+        r = requests.get(image_url)
         if(r.status_code == 200):
             with open(join(images_dir, s['id'] + extension),"bx") as f:
                 f.write(r.content)
@@ -98,24 +105,32 @@ while True:
         comments = get_comments(ids=comment_ids, **comments_params)
         if comments is None:
             continue
+        
         for c in comments:
             if 't1_' in c['parent_id']:
                 c['is_child'] = True
             else:
                 c['is_child'] = False
             c['parent_id'] = c['parent_id'].split('_')[1]
+            c['body'] = c['body'].replace('\n', ' ')
+            
         df = json_normalize(comments)
-        df.to_csv(join(comments_dir, "{}.csv".format(s['id'] )), index = False)
+        with open(join(comments_dir, "{}.csv".format(s['id'])), 'w', encoding='utf-8') as f:
+            df.to_csv(f, index = False, line_terminator='\n')
 
         before = s['created_utc']
         submissions_lst.append(s)
 
-        if len(submissions_lst) == submission_to_crawl:
+        if scrapped == submission_to_crawl:
             break
+        
+    # Write submissions. Either create or append to csv
+    df = json_normalize(submissions_lst)
+    with open(join(output_dir, "submissions.csv"), 'a', encoding='utf-8') as f:
+        df.to_csv(f, index = False, header=f.tell()==0, line_terminator='\n')
+        
+    scrapped += len(submissions_lst)
 
-    if len(submissions_lst) == submission_to_crawl:
-        break
-
-df = json_normalize(submissions_lst)
-df.to_csv(join(output_dir, "submissions.csv"), index = False)
-print('Finished!')
+    if scrapped == submission_to_crawl:
+        print('Finished!')
+        exit()
