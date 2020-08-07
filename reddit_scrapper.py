@@ -7,16 +7,14 @@ import pandas
 from os.path import join
 from pathlib import Path
 
-def get_comments(**kwargs):
-    r = requests.get("https://api.pushshift.io/reddit/comment/search/", params=kwargs)
-    try:
-        data = r.json()['data']
-    except:
-        return None
-    return data
+urls = {
+        'comments' : 'https://api.pushshift.io/reddit/comment/search/',
+        'submissions' : 'https://api.pushshift.io/reddit/submission/search/',
+        'comment_ids' : 'https://api.pushshift.io/reddit/submission/comment_ids/'
+        }
 
-def get_submissions(**kwargs):
-    r = requests.get("https://api.pushshift.io/reddit/submission/search/", params=kwargs)
+def get(what, **kwargs):
+    r = requests.get(urls[what], params=kwargs)
     try:
         data = r.json()['data']
     except:
@@ -24,19 +22,16 @@ def get_submissions(**kwargs):
     return data
 
 def get_comment_ids_of_submission(submission_id):
-    r = requests.get("https://api.pushshift.io/reddit/submission/comment_ids/" + str(submission_id))
+    r = requests.get(urls['comment_ids'] + str(submission_id))
     try:
         comment_ids = r.json()['data']
     except:
         return None
     return comment_ids
 
-# Scrapping parameters
+# Program parameters
 submission_to_crawl = 1000000
-#days_to_crawl = 7
-#after=(datetime.now() - timedelta(days=days_to_crawl)).timestamp()
-
-before=int((datetime.now() - timedelta(days=1)).timestamp())
+database = 'database_1596481650' # Set to None to start from today, else continues on specified database
 submissions_params = dict(
     subreddit = 'NatureIsFuckingLit',
     filter = ['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url', 'permalink'],
@@ -49,12 +44,17 @@ comments_params = dict(
     filter = ['id', 'author', 'score', 'body', 'parent_id', 'permalink']
 )
 
-#filter_submissions = ['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url']
-#filter_comments = ['id', 'author', 'score', 'body', 'parent_id']
-
-# Save directory
-#output_dir = 'database_{:d}'.format(before)
-output_dir = 'H:\\reddit\\' + 'database_{:d}'.format(before)
+if database is None:
+    # Save directory
+    #output_dir = 'database_{:d}'.format(before)
+    before=int((datetime.now() - timedelta(days=1)).timestamp())
+    output_dir = 'H:\\reddit\\' + 'database_{:d}'.format(before)
+else:
+    output_dir = 'H:\\reddit\\' + database
+    df = pandas.read_csv(join(output_dir, "submissions.csv"))
+    before=int(df['created_utc'].min())
+    
+comments_dir = join(output_dir, 'comments')
 images_dir = join(output_dir, 'images')
 comments_dir = join(output_dir, 'comments')
 Path(images_dir).mkdir(parents=True, exist_ok=True)
@@ -66,15 +66,13 @@ while True:
     print('Scrapped {:d}/{:d} submissions...'.format(scrapped, submission_to_crawl))
     # Save all scrapped submissions in this list
     submissions_lst = []
-    submissions = get_submissions(before=before, **submissions_params)
+    submissions = get('submissions', before=before, **submissions_params)
     if not submissions: 
         print('No submissions left!')     
         exit()
 
     for s in submissions:
-        #print(s)
-
-        # Download image
+        # Get image url
         image_url = s['url']
         if '.png' in image_url:
             extension = '.png'
@@ -84,27 +82,19 @@ while True:
             if not '.jpg' in image_url:
                 image_url = image_url.replace('imgur', 'i.imgur')
                 image_url += '.jpg'
+            if 'm.i.imgur' in image_url:
+                image_url = image_url.replace('m.i.imgur', 'i.imgur')
             extension = '.jpeg'
-            print(image_url)
-        else:
-            continue
-
-        # TODO: Async
-        r = requests.get(image_url)
-        if(r.status_code == 200):
-            with open(join(images_dir, s['id'] + extension),"bx") as f:
-                f.write(r.content)
+            #print(image_url)
         else:
             continue
 
         # Crawl comments
         # TODO: Async
         comment_ids = get_comment_ids_of_submission(s['id'])
-        if comment_ids is None:
-            continue
-        comments = get_comments(ids=comment_ids, **comments_params)
-        if comments is None:
-            continue
+        if comment_ids is None: continue
+        comments = get('comments', ids=comment_ids, **comments_params)
+        if comments is None: continue
         
         for c in comments:
             if 't1_' in c['parent_id']:
@@ -117,19 +107,26 @@ while True:
         df = json_normalize(comments)
         with open(join(comments_dir, "{}.csv".format(s['id'])), 'w', encoding='utf-8') as f:
             df.to_csv(f, index = False, line_terminator='\n')
+            
+        # Save image
+        # TODO: Async
+        r = requests.get(image_url)
+        if(r.status_code == 200):
+            with open(join(images_dir, s['id'] + extension),'wb') as f:
+                f.write(r.content)
+        else: continue
 
         before = s['created_utc']
         submissions_lst.append(s)
 
+        scrapped += 1
         if scrapped == submission_to_crawl:
             break
         
     # Write submissions. Either create or append to csv
     df = json_normalize(submissions_lst)
-    with open(join(output_dir, "submissions.csv"), 'a', encoding='utf-8') as f:
+    with open(join(output_dir, 'submissions.csv'), 'a', encoding='utf-8') as f:
         df.to_csv(f, index = False, header=f.tell()==0, line_terminator='\n')
-        
-    scrapped += len(submissions_lst)
 
     if scrapped == submission_to_crawl:
         print('Finished!')
