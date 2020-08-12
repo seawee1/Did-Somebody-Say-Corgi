@@ -1,34 +1,24 @@
-import requests
-import time
-import json
 from datetime import datetime, timedelta
 from pandas import json_normalize
 import pandas
 from os.path import join
 from pathlib import Path
+import math
 
+#import requests
 import aiohttp
 import asyncio
-#import aiofiles
 import aiohttp_retry
-#import random
-#from bs4 import BeautifulSoup
+from urllib import parse
 
-#def scrap_proxies():
-#    res = requests.get('https://free-proxy-list.net/', headers={'User-Agent': 'Mozilla/5.0'})
-#    soup = BeautifulSoup(res.text, "lxml")
-#    proxy_list = []
-#    for items in soup.select("#proxylisttable tbody tr"):
-#        proxy = ':'.join([item.text for item in items.select("td")[:2]])
-#        proxy_list.append(proxy)
-#    return proxy_list
-
+# Async get_submissions
 async def get_submissions(**kwargs):
     async with aiohttp.ClientSession() as session:
         async with session.get('https://api.pushshift.io/reddit/submission/search/', params=kwargs) as resp:
             response = await resp.json()
             return response['data']
 
+# Sync get_submission
 #def get_submissions(**kwargs):
 #    r = requests.get('https://api.pushshift.io/reddit/submission/search/', params=kwargs)
 #    try:
@@ -37,27 +27,43 @@ async def get_submissions(**kwargs):
 #    except:
 #        return None
 
+# Chunks comment_ids
+def comment_ids_chunks(comment_ids):
+    max_len = 8190 # max length of GET url
+    base_len = len('https://api.pushshift.io/reddit/comment/search/') + len(parse.urlencode(comments_params)) # Fixed for every request
+    ids_max_len = max_len - base_len # Max length of url part containing comment ids
+    id_len = 12 # Looks like this: &ids=drm7806
+    max_ids_per_request = ids_max_len // id_len # Resulting max amount of comment_ids per request
+    chunks = math.ceil(len(comment_ids) / max_ids_per_request) # Resulting amount of necessary requests
+
+    # Generator yielding comment_ids
+    for i in range(chunks):
+        start = i * max_ids_per_request
+        end = start + max_ids_per_request
+        yield comment_ids[start:end]
+
+
 async def download_submission(submission, delay):
+    # Delay based on task_id to reduce 429 status (too many requests)
     await asyncio.sleep(delay)
 
-    #proxy = 'http://' + random.choice(proxy_list)
-
+    # We use aiohttp_retry to maximize response rate
     #async with aiohttp.ClientSession() as session:
     async with aiohttp_retry.RetryClient(raise_for_status = False) as session:
-        comments = None
 
         # Get comment ids of submission
         comment_ids = None
         async with session.get('https://api.pushshift.io/reddit/submission/comment_ids/' + str(submission['id']), **retry_params) as resp:
-        #async with session.get('https://api.pushshift.io/reddit/submission/comment_ids/' + str(submission['id']), proxy=proxy) as resp:
             response = await resp.json()
             comment_ids = response['data']
 
         # Get the actual comments
-        async with session.get('https://api.pushshift.io/reddit/comment/search/', params = {**comments_params, 'ids':comment_ids}, **retry_params) as resp:
-        #async with session.get('https://api.pushshift.io/reddit/comment/search/', params = {**comments_params, 'ids':comment_ids}, proxy=proxy) as resp:
-            response = await resp.json()
-            comments = response['data']
+        comments = []
+        # Comment request has to be chunked, because request must not be longer than 8190 characters
+        for comment_ids_chunk in comment_ids_chunks(comment_ids):
+            async with session.get('https://api.pushshift.io/reddit/comment/search/', params = {**comments_params, 'ids':comment_ids_chunk}, **retry_params) as resp:
+                response = await resp.json()
+                comments.extend(response['data'])
 
         # Prepare image url
         image_url = submission['url']
@@ -68,8 +74,9 @@ async def download_submission(submission, delay):
             extension = '.jpeg'
         elif 'imgur' in image_url and not '.gifv' in image_url:
             if not '.jpg' in image_url:
-                image_url = image_url.replace('imgur', 'i.imgur')
                 image_url += '.jpg'
+            if not 'i.imgur' in image_url:
+                image_url = image_url.replace('imgur', 'i.imgur')
             if 'm.i.imgur' in image_url:
                 image_url = image_url.replace('m.i.imgur', 'i.imgur')
             extension = '.jpeg'
@@ -87,27 +94,14 @@ async def download_submission(submission, delay):
         df = json_normalize(comments)
 
         # Download image and save
-
-        #async with session.get(image_url, proxy=proxy) as resp:
         async with session.get(image_url) as resp:
             with open(join(images_dir, submission['id'] + extension), mode = 'wb') as f:
-                #async with session.get(image_url) as resp:
-                #f = await aiofiles.open(join(images_dir, submission['id'] + extension), mode = 'wb')
-                #await f.write(await resp.read())
-                #await f.close()
                 f.write(await resp.read())
 
         # Save comments
         with open(join(comments_dir, '{}.csv'.format(submission['id'])), mode='w', encoding='utf-8') as f:
             df.to_csv(f, index=False, line_terminator='\n')
-        #f = await aiofiles.open(join(comments_dir, '{}.csv'.format(submission['id'])), mode='w', encoding='utf-8')
-        #await
-        #await f.close()
 
-        # Append to submissions index
-        #f = await aiofiles.open(join(output_dir, 'submissions.csv'), mode='a', encoding='utf-8')
-        #await df.to_csv(f, index=False, header=f.tell() == 0, line_terminator='\n')
-        #await f.close()
         return submission
 
 
@@ -118,6 +112,7 @@ async def main():
     while scrapped < submission_to_scrap:
         print('Scrapped {:d}/{:d} submissions...'.format(scrapped, submission_to_scrap))
 
+        # This actually doesn't have to be asynchronous, as it is a single GET request
         done, _ = await asyncio.wait([get_submissions(before=before, **submissions_params)])
         submissions = list(done)[0].result()
 
@@ -133,7 +128,7 @@ async def main():
             if isinstance(d, Exception):
                 print(d)
 
-        # Unsucessful ones are of type Exception
+        # Unsuccesful ones are of type Exception, as return_exceptions=True for asyncio.gather
         successful = [x for x in done if isinstance(x, dict)]
 
         # Append to submission index
@@ -144,11 +139,8 @@ async def main():
         scrapped += len(successful)
 
 if __name__ == '__main__':
-    #proxy_list = scrap_proxies()
     submission_to_scrap = 1000000
 
-    # database = 'database_1596481650' # Set to None to start from today, else continues on specified database
-    database = None
     submissions_params = dict(
         subreddit='NatureIsFuckingLit',
         filter=['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url', 'permalink'],
@@ -169,6 +161,7 @@ if __name__ == '__main__':
         retry_for_statuses = {429}
     )
 
+    database = 'database_1597063213' # Set to None to start from today, else continues on specified database
     if database is None:
         # Save directory
         # output_dir = 'database_{:d}'.format(before)
@@ -178,7 +171,6 @@ if __name__ == '__main__':
         output_dir = 'H:\\reddit\\' + database
         df = pandas.read_csv(join(output_dir, "submissions.csv"))
         before = int(df['created_utc'].min())
-
     comments_dir = join(output_dir, 'comments')
     images_dir = join(output_dir, 'images')
     comments_dir = join(output_dir, 'comments')
