@@ -109,12 +109,14 @@ async def main():
     global before
 
     scrapped = 0
-    while scrapped < submission_to_scrap:
-        print('Scrapped {:d}/{:d} submissions...'.format(scrapped, submission_to_scrap))
+    print('Starting...')
+    while True:
+        print('\rScrapped {:d} submissions until {}...'.format(scrapped, datetime.fromtimestamp(before).date()), end='', flush=True)
 
         # This actually doesn't have to be asynchronous, as it is a single GET request
         done, _ = await asyncio.wait([get_submissions(before=before, **submissions_params)])
         submissions = list(done)[0].result()
+        if (len(submissions) == 0): break
 
         # Create tasks
         tasks = []
@@ -138,11 +140,11 @@ async def main():
 
         scrapped += len(successful)
 
-if __name__ == '__main__':
-    submission_to_scrap = 1000000
+    print("\nFinished!")
 
+if __name__ == '__main__':
     submissions_params = dict(
-        subreddit='NatureIsFuckingLit',
+        subreddit='EarthPorn',
         filter=['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url', 'permalink'],
         num_comments='>10',
         is_video='false',
@@ -161,7 +163,8 @@ if __name__ == '__main__':
         retry_for_statuses = {429}
     )
 
-    database = 'database_1597063213' # Set to None to start from today, else continues on specified database
+    #database = 'database_1597063213' # Set to None to start from today, else continues on specified database
+    database = None
     if database is None:
         # Save directory
         # output_dir = 'database_{:d}'.format(before)
