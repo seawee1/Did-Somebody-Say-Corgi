@@ -72,9 +72,11 @@ async def download_submission(submission, delay):
             extension = '.png'
         elif '.jpg' in image_url or '.jpeg' in image_url:
             extension = '.jpeg'
-        elif 'imgur' in image_url and not '.gifv' in image_url:
-            if not '.jpg' in image_url:
-                image_url += '.jpg'
+        elif 'imgur' in image_url:
+            # We don't want videos
+            if '.gifv' in image_url or '.mp4' in image_url or '.gif' in image_url:
+                return
+
             if not 'i.imgur' in image_url:
                 image_url = image_url.replace('imgur', 'i.imgur')
             if 'm.i.imgur' in image_url:
@@ -147,9 +149,9 @@ if __name__ == '__main__':
         subreddit='EarthPorn',
         filter=['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url', 'permalink'],
         num_comments='>10',
-        is_video='false',
+        #is_video='false', # After a certain date (around 2017) posts don't have this flag, thus nothing gets returned
         score='>100',
-        size=20
+        size=25
     )
     comments_params = dict(
         filter=['id', 'author', 'score', 'body', 'parent_id', 'permalink']
@@ -164,7 +166,7 @@ if __name__ == '__main__':
     )
 
     #database = 'database_1597063213' # Set to None to start from today, else continues on specified database
-    database = None
+    database = 'database_1597917090'
     if database is None:
         # Save directory
         # output_dir = 'database_{:d}'.format(before)
