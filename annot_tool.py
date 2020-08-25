@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QAction, QFileDialog
+from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QAction, QFileDialog, QVBoxLayout
 from PyQt5.QtGui import QPainter, QPen, QKeyEvent
 from PyQt5.Qt import Qt, QEvent
 
@@ -20,7 +20,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.title)
 
         # Shorter side of image is scaled to this size
-        self.display_size = 500
+        self.displaySize = 500
+        self.targetSize = 1024
+        self.bboxSteps = 5
         self.resize(1024, 786)
 
         # Menu bar
@@ -57,6 +59,8 @@ class MainWindow(QMainWindow):
 
         self.painter = None
 
+        self.show()
+
     def openDataset(self):
         # Open dataset .csv
         filename = QFileDialog.getOpenFileName(self, 'Open File')
@@ -65,7 +69,9 @@ class MainWindow(QMainWindow):
 
         # Add flagged and crop_offset columns
         self.df['flagged'] = False
-        self.df['crop_offset'] = np.nan
+        self.df['bboxX'] = np.nan
+        self.df['bboxY'] = np.nan
+        self.df['bboxSize'] = np.nan
 
         # Display first image
         self.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_F, Qt.NoModifier))
@@ -76,30 +82,42 @@ class MainWindow(QMainWindow):
         with open(filename[0], 'w', encoding='utf-8') as f:
             self.df.to_csv(f, index = False, line_terminator='\n')
 
-    # xOffset and yOffset are for crop bounding box
-    def displayImage(self, xOffset=0.0, yOffset=0.0):
+    def prepareImage(self):
+        self.xOffset, self.yOffset, self.bboxScale = 0.0, 0.0, 1.0
         # Load image
+        self.im = Image.open(self.imagepath)
         self.pixmap = QPixmap(self.imagepath)
 
         # Scale shorter side to self.display_size while retaining aspect ratio
-        w, h = self.im.size
-        isBroad = (w > h)
-        if isBroad:
-            scale_f = self.display_size / h
-            w = int(scale_f * w)
-            h = self.display_size
-        else:
-            scale_f = self.display_size / w
-            w = self.display_size
-            h = int(scale_f * h)
+        self.w, self.h = self.im.size
+        self.isBroad = (self.w > self.h)
+        if self.isBroad:
+            self.bboxMax = self.h
 
-        if isBroad:
-            self.pixmap = self.pixmap.scaledToHeight(self.display_size)
+            self.scale_f = self.displaySize / self.h
+            self.w = int(self.scale_f * self.w)
+            self.h = self.displaySize
         else:
-            self.pixmap = self.pixmap.scaledToWidth(self.display_size)
+            self.bboxMax = self.w
 
+            self.scale_f = self.displaySize / self.w
+            self.w = self.displaySize
+            self.h = int(self.scale_f * self.h)
+
+        self.bboxMin = self.targetSize if self.targetSize < self.bboxMax else self.bboxMax
+        self.bboxStep = (self.bboxMax - self.bboxMin) / self.bboxSteps
+
+        if self.isBroad:
+            self.pixmap = self.pixmap.scaledToHeight(self.displaySize)
+        else:
+            self.pixmap = self.pixmap.scaledToWidth(self.displaySize)
+
+
+    # xOffset and yOffset are for crop bounding box
+    def displayImage(self):
+        pixmap = self.pixmap.copy()
         # Create painter
-        self.painter = QPainter(self.pixmap)
+        self.painter = QPainter(pixmap)
 
         # Configure painter
         self.penRectangle = QPen(Qt.red)
@@ -107,23 +125,26 @@ class MainWindow(QMainWindow):
         self.painter.setPen(self.penRectangle)
 
         # Initial position of bounding box
-        xPos = (0.5 * w - 0.5 * self.display_size)
-        yPos = (0.5 * h - 0.5 * self.display_size)
+        bboxSize = self.bboxMin * self.scale_f  +  self.bboxScale*self.bboxSteps*self.bboxStep*self.scale_f
+        xPos = (0.5 * self.w - 0.5 * bboxSize)
+        yPos = (0.5 * self.h - 0.5 * bboxSize)
 
         # Add offset
-        x = min(max(xPos + xOffset, 0.0), w-self.display_size)
-        y = min(max(yPos + yOffset, 0.0), h-self.display_size)
+        x = min(max(xPos + self.xOffset, 0.0), self.w-bboxSize)
+        y = min(max(yPos + self.yOffset, 0.0), self.h-bboxSize)
 
         # Draw bounding box rectangle and center point
-        self.painter.drawRect(x, y, self.display_size-1, self.display_size-1)
-        self.painter.drawPoint(x+(self.display_size-1)/2, y+(self.display_size-1)/2)
-        self.label.setPixmap(self.pixmap)
+        self.painter.drawRect(x, y, bboxSize-1, bboxSize-1)
+        self.painter.drawPoint(x+(bboxSize-1)/2, y+(bboxSize-1)/2)
+        self.label.setPixmap(pixmap)
 
         # Save crop_offset to dataframe
-        if xOffset == 0.0 and yOffset == 0.0:
-            self.df.loc[self.cur_index, 'crop_offset'] = np.nan
-        else:
-            self.df.loc[self.cur_index, 'crop_offset'] = int(x * 1.0/scale_f) if isBroad else int(y * 1.0/scale_f)
+        scale_f_inv = 1.0/self.scale_f
+        bboxX, bboxY, bboxSize_ = int(x * scale_f_inv), int(y * scale_f_inv), int(bboxSize * scale_f_inv)
+        print('X: {:d}, Y: {:d}, S: {:d}'.format(bboxX, bboxY, bboxSize_))
+        self.df.loc[self.cur_index, 'bboxX'] = bboxX
+        self.df.loc[self.cur_index, 'bboxY'] = bboxY
+        self.df.loc[self.cur_index, 'bboxSize'] = bboxSize_
 
         del self.painter
 
@@ -132,23 +153,14 @@ class MainWindow(QMainWindow):
         if self.df is None:
             return
 
-        w, h = self.im.size
-        isBroad = (w > h)
+        self.xOffset = event.pos().x() - self.label.width()/2
+        self.yOffset = event.pos().y() - self.label.height()/2
 
-        x = event.pos().x() - self.label.width()/2
-        y = event.pos().y() - self.label.height()/2
+        self.displayImage()
 
-        xOffset, yOffset = 0.0, 0.0
-        if isBroad:
-            xOffset = x
-        else:
-            yOffset = y
-
-        self.displayImage(xOffset, yOffset)
 
     def keyPressEvent(self, event):
         key = event.key()
-
         new_image = False
         if event.key() == Qt.Key_F: # Next image
             new_image = True
@@ -156,10 +168,29 @@ class MainWindow(QMainWindow):
         elif event.key() == Qt.Key_A: # Previous image
             new_image = True
             self.cur_index = self.cur_index - 1 if self.cur_index - 1 >= 0 else 0
-        elif event.key() == Qt.Key_L: # Flag image
-            self.df.loc[self.cur_index, 'flagged'] = True
-        elif event.key() == Qt.Key_H: # Unflag image
-            self.df.loc[self.cur_index, 'flagged'] = False
+        elif event.key() == Qt.Key_L: # Move BBox
+            self.xOffset += 20.0
+            self.displayImage()
+        elif event.key() == Qt.Key_H:
+            self.xOffset -= 20.0
+            self.displayImage()
+        elif event.key() == Qt.Key_J:
+            self.yOffset += 20.0
+            self.displayImage()
+        elif event.key() == Qt.Key_K:
+            self.yOffset -= 20.0
+            self.displayImage()
+        elif event.key() == Qt.Key_D: # Change Bbox scale
+            self.bboxScale += 1.0/self.bboxSteps
+            self.bboxScale = min(1.0, self.bboxScale)
+            self.displayImage()
+        elif event.key() == Qt.Key_S:
+            self.bboxScale -= 1.0/self.bboxSteps
+            self.bboxScale = max(0.0, self.bboxScale)
+            self.displayImage()
+        elif event.key() == Qt.Key_G: # Flag/Unflag
+            self.df.loc[self.cur_index, 'flagged'] = not self.df.loc[self.cur_index, 'flagged']
+            print('Flagged:', self.df.loc[self.cur_index, 'flagged'])
 
         # Open image and display
         if new_image:
@@ -173,7 +204,7 @@ class MainWindow(QMainWindow):
                 self.df.iloc[self.cur_index]['flagged'] = True
                 self.keyPressEvent(event)
 
-            self.im = Image.open(self.imagepath)
+            self.prepareImage()
             self.displayImage()
 
 def except_hook(cls, exception, traceback):
