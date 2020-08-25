@@ -23,7 +23,9 @@ class MainWindow(QMainWindow):
         self.displaySize = 500
         self.targetSize = 1024
         self.bboxSteps = 5
-        self.resize(1024, 786)
+        self.resize(1200, 800)
+        self.setFixedSize(1200, 800)
+
 
         # Menu bar
         # Open dataset
@@ -68,10 +70,10 @@ class MainWindow(QMainWindow):
         self.df = pd.read_csv(filename[0])
 
         # Add flagged and crop_offset columns
-        self.df['flagged'] = False
-        self.df['bboxX'] = np.nan
-        self.df['bboxY'] = np.nan
-        self.df['bboxSize'] = np.nan
+        #self.df['flagged'] = False
+        #self.df['bboxX'] = np.nan
+        #self.df['bboxY'] = np.nan
+        #self.df['bboxSize'] = np.nan
 
         # Display first image
         self.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_F, Qt.NoModifier))
@@ -141,7 +143,7 @@ class MainWindow(QMainWindow):
         # Save crop_offset to dataframe
         scale_f_inv = 1.0/self.scale_f
         bboxX, bboxY, bboxSize_ = int(x * scale_f_inv), int(y * scale_f_inv), int(bboxSize * scale_f_inv)
-        print('X: {:d}, Y: {:d}, S: {:d}'.format(bboxX, bboxY, bboxSize_))
+        print('{:d}/{:d} | X: {:d}, Y: {:d}, S: {:d}'.format(self.cur_index, len(self.df), bboxX, bboxY, bboxSize_))
         self.df.loc[self.cur_index, 'bboxX'] = bboxX
         self.df.loc[self.cur_index, 'bboxY'] = bboxY
         self.df.loc[self.cur_index, 'bboxSize'] = bboxSize_
@@ -203,6 +205,14 @@ class MainWindow(QMainWindow):
                 print('Skipping image, because not found')
                 self.df.iloc[self.cur_index]['flagged'] = True
                 self.keyPressEvent(event)
+
+            try:
+                im = Image.open(self.imagepath)
+            except:
+                print('Skipping image, because cannot open')
+                self.df.loc[self.cur_index, 'flagged'] = True
+                self.keyPressEvent(event)
+
 
             self.prepareImage()
             self.displayImage()
