@@ -43,7 +43,7 @@ def comment_ids_chunks(comment_ids):
         yield comment_ids[start:end]
 
 
-async def download_submission(submission, delay):
+async def download_submission(submission, delay, download_comments=True):
     # Delay based on task_id to reduce 429 status (too many requests)
     await asyncio.sleep(delay)
 
@@ -51,19 +51,30 @@ async def download_submission(submission, delay):
     #async with aiohttp.ClientSession() as session:
     async with aiohttp_retry.RetryClient(raise_for_status = False) as session:
 
-        # Get comment ids of submission
-        comment_ids = None
-        async with session.get('https://api.pushshift.io/reddit/submission/comment_ids/' + str(submission['id']), **retry_params) as resp:
-            response = await resp.json()
-            comment_ids = response['data']
-
-        # Get the actual comments
-        comments = []
-        # Comment request has to be chunked, because request must not be longer than 8190 characters
-        for comment_ids_chunk in comment_ids_chunks(comment_ids):
-            async with session.get('https://api.pushshift.io/reddit/comment/search/', params = {**comments_params, 'ids':comment_ids_chunk}, **retry_params) as resp:
+        if download_comments:
+            # Get comment ids of submission
+            comment_ids = None
+            async with session.get('https://api.pushshift.io/reddit/submission/comment_ids/' + str(submission['id']), **retry_params) as resp:
                 response = await resp.json()
-                comments.extend(response['data'])
+                comment_ids = response['data']
+
+            # Get the actual comments
+            comments = []
+            # Comment request has to be chunked, because request must not be longer than 8190 characters
+            for comment_ids_chunk in comment_ids_chunks(comment_ids):
+                async with session.get('https://api.pushshift.io/reddit/comment/search/', params = {**comments_params, 'ids':comment_ids_chunk}, **retry_params) as resp:
+                    response = await resp.json()
+                    comments.extend(response['data'])
+
+            # Prepare comments dataframe
+            for c in comments:
+                if 't1_' in c['parent_id']:
+                    c['is_child'] = True
+                else:
+                    c['is_child'] = False
+                c['parent_id'] = c['parent_id'].split('_')[1]
+                c['body'] = c['body'].replace('\n', ' ')
+            df = json_normalize(comments)
 
         # Prepare image url
         image_url = submission['url']
@@ -85,30 +96,22 @@ async def download_submission(submission, delay):
         else:
             return
 
-        # Prepare comments dataframe
-        for c in comments:
-            if 't1_' in c['parent_id']:
-                c['is_child'] = True
-            else:
-                c['is_child'] = False
-            c['parent_id'] = c['parent_id'].split('_')[1]
-            c['body'] = c['body'].replace('\n', ' ')
-        df = json_normalize(comments)
 
         # Download image and save
         async with session.get(image_url) as resp:
             with open(join(images_dir, submission['id'] + extension), mode = 'wb') as f:
                 f.write(await resp.read())
 
-        # Save comments
-        with open(join(comments_dir, '{}.csv'.format(submission['id'])), mode='w', encoding='utf-8') as f:
-            df.to_csv(f, index=False, line_terminator='\n')
+        if download_comments:
+            # Save comments
+            with open(join(comments_dir, '{}.csv'.format(submission['id'])), mode='w', encoding='utf-8') as f:
+                df.to_csv(f, index=False, line_terminator='\n')
 
         return submission
 
 
 async def main():
-    global before
+    global before, download_comments
 
     scrapped = 0
     print('Starting...')
@@ -123,7 +126,7 @@ async def main():
         # Create tasks
         tasks = []
         for i, s in enumerate(submissions):
-            tasks.append(download_submission(s, i))
+            tasks.append(download_submission(s, i, download_comments))
             before = s['created_utc']
 
         # Wait until finished
@@ -146,7 +149,7 @@ async def main():
 
 if __name__ == '__main__':
     submissions_params = dict(
-        subreddit='EarthPorn',
+        subreddit='Corgi',
         filter=['id', 'title', 'author', 'score', 'created_utc', 'num_comments', 'is_video', 'url', 'permalink'],
         num_comments='>10',
         #is_video='false', # After a certain date (around 2017) posts don't have this flag, thus nothing gets returned
@@ -156,7 +159,6 @@ if __name__ == '__main__':
     comments_params = dict(
         filter=['id', 'author', 'score', 'body', 'parent_id', 'permalink']
     )
-
     retry_params = dict(
         retry_attempts = 5,
         retry_start_timeout = 5.0,
@@ -166,7 +168,9 @@ if __name__ == '__main__':
     )
 
     #database = 'database_1597063213' # Set to None to start from today, else continues on specified database
-    database = 'database_1597917090'
+    #database = 'database_1597917090'
+    database = None
+    download_comments = False
     if database is None:
         # Save directory
         # output_dir = 'database_{:d}'.format(before)
@@ -176,10 +180,11 @@ if __name__ == '__main__':
         output_dir = 'H:\\reddit\\' + database
         df = pandas.read_csv(join(output_dir, "submissions.csv"))
         before = int(df['created_utc'].min())
-    comments_dir = join(output_dir, 'comments')
+
     images_dir = join(output_dir, 'images')
-    comments_dir = join(output_dir, 'comments')
     Path(images_dir).mkdir(parents=True, exist_ok=True)
-    Path(comments_dir).mkdir(parents=True, exist_ok=True)
+    if download_comments:
+        comments_dir = join(output_dir, 'comments')
+        Path(comments_dir).mkdir(parents=True, exist_ok=True)
 
     asyncio.run(main())
