@@ -1,0 +1,5 @@
+pinvenv/
+__pycache__/
+ghostdriver*
+venv/
+.idea/
