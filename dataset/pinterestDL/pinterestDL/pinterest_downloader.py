@@ -141,6 +141,12 @@ def _handle_download_report(future, url):
     """
     download_report = future.result()
     downloaded = True
+    try:
+        download_report = future.result()
+        downloaded = True
+    except:
+        download_report = {'downloaded': False, 'reason': 'else'}
+
     if not download_report["downloaded"]:
         reason = download_report["reason"]
         downloaded = False
@@ -250,7 +256,10 @@ class PinterestDownloader(object):
         self.browser.close()
         if os.path.isfile("geckodriver.log"):
             logger.debug("Removing geckodriver.log")
-            os.remove("geckodriver.log")
+            try:
+                os.remove("geckodriver.log")
+            except:
+                pass
 
     def download_board(self, board_url, download_folder,
                        board_name=None, num_pins=None,
