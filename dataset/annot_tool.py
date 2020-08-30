@@ -5,6 +5,7 @@ from os.path import join as opjoin
 from PIL import Image
 import pandas as pd
 import numpy as np
+import pathlib
 
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QAction, QFileDialog, QVBoxLayout
@@ -65,9 +66,10 @@ class MainWindow(QMainWindow):
 
     def openDataset(self):
         # Open dataset .csv
-        filename = QFileDialog.getOpenFileName(self, 'Open File')
-        self.dataset_path = os.path.dirname(filename[0])
+        file_name = QFileDialog.getOpenFileName(self, 'Open File')
+        self.dataset_path = os.path.dirname(file_name[0])
         self.df = pd.read_csv(filename[0])
+        #pathlib.Path(self.dataset_path, 'labels').mkdir(parents=True, exist_ok=True)
 
         # Add flagged and crop_offset columns
         #self.df['flagged'] = False
