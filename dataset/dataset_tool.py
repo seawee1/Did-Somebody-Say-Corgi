@@ -22,6 +22,9 @@ def predict_labels():
     pathlib.Path(pred_dir).mkdir(parents=True, exist_ok=True)
 
     for image_name in tqdm(image_names):
+        ext = image_name.split('.')[1]
+        if ext not in ['jpg', 'jpeg', 'png']:
+            continue
         # Predict
         image = Image.open(os.path.join(image_dir, image_name))
         image_tensor = ToTensor()(image).unsqueeze(0)
@@ -100,53 +103,73 @@ def crop():
     for image_name in tqdm(image_names):
         basename, ext = image_name.split('.')
 
-        # Load prediction
-        prediction = pickle.load(open(os.path.join(pred_dir, basename + '.pkl'), 'rb'))
-
-        # Find predictions > probability threshold
-        idxs = np.argwhere((prediction['labels'] == 18) & (prediction['scores'] > args.filter)).flatten()
-
-        # If unequal to 1, supervision is needed
-        if len(idxs) != 1:
-            os.rename(opjoin(image_dir, image_name), opjoin(supervision_dir, image_name))
-
         # Open image
         im = Image.open(opjoin(image_dir, image_name))
-        w, h = im.size
-        min_side_img = min(w, h)
 
-        # Get bbox
-        idx = idxs[0]
-        bbox = prediction['boxes'][idx]
+        if os.path.isfile(opjoin(pred_dir, basename + '.pkl')):
+            # Load prediction
+            prediction = pickle.load(open(opjoin(pred_dir, basename + '.pkl'), 'rb'))
 
-        # Scale to at least 1024 pixels
-        if min_side_img < 1024:
-            scale_f = 1024 / min_side_img
-            im = im.resize((int(w * scale_f), int(h * scale_f)))
+            # Find predictions > probability threshold
+            idxs = np.argwhere((prediction['labels'] == 18) & (prediction['scores'] > args.filter)).flatten()
+
+            # If unequal to 1, supervision is needed
+            if len(idxs) != 1:
+                os.rename(opjoin(image_dir, image_name), opjoin(supervision_dir, image_name))
+                continue
+
+            # Image dimensions
             w, h = im.size
             min_side_img = min(w, h)
-            bbox *= scale_f
 
-        # Calculate longer side of bbox
-        max_side_bbox = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]))
+            # Get bbox
+            idx = idxs[0]
+            bbox = prediction['boxes'][idx]
 
-        # Ensure that crop is at least 1024, fits into image and,
-        # if possible, has size max_side_bbox + max_size_img/10
-        crop_size = min(min_side_img, max(1024, max_side_bbox + min_side_img / 10))
+            # Scale to at least 1024 pixels
+            if min_side_img < 1024:
+                scale_f = 1024 / min_side_img
+                im = im.resize((int(w * scale_f), int(h * scale_f)))
+                w, h = im.size
+                min_side_img = min(w, h)
+                bbox *= scale_f
 
-        # Try to center crop around bbox center
-        bbox_center_x = bbox[0] + (bbox[2] - bbox[0]) / 2
-        bbox_center_y = bbox[1] + (bbox[3] - bbox[1]) / 2
-        crop_x = max(0, bbox_center_x - crop_size / 2)
-        crop_y = max(0, bbox_center_y - crop_size / 2)
+            # Calculate longer side of bbox
+            max_side_bbox = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]))
 
-        # Adjust in case the bbox is partially outside the image
-        crop_x_over = w - (crop_x + crop_size)
-        crop_y_over = h - (crop_y + crop_size)
-        if crop_x_over < 0:
-            crop_x += crop_x_over
-        if crop_y_over < 0:
-            crop_y += crop_y_over
+            # Ensure that crop is at least 1024, fits into image and,
+            # if possible, has size max_side_bbox + max_size_img/10
+            crop_size = min(min_side_img, max(1024, max_side_bbox + min_side_img / 10))
+
+            # Try to center crop around bbox center
+            bbox_center_x = bbox[0] + (bbox[2] - bbox[0]) / 2
+            bbox_center_y = bbox[1] + (bbox[3] - bbox[1]) / 2
+            crop_x = max(0, bbox_center_x - crop_size / 2)
+            crop_y = max(0, bbox_center_y - crop_size / 2)
+
+            # Adjust in case the bbox is partially outside the image
+            crop_x_over = w - (crop_x + crop_size)
+            crop_y_over = h - (crop_y + crop_size)
+            if crop_x_over < 0:
+                crop_x += crop_x_over
+            if crop_y_over < 0:
+                crop_y += crop_y_over
+
+        else:
+            # Image dimensions
+            w, h = im.size
+            min_side_img = min(w, h)
+
+            # Scale to at least 1024 pixels
+            if min_side_img < 1024:
+                scale_f = 1024/min_side_img
+                im = im.resize((int(w * scale_f), int(h * scale_f)))
+                w, h = im.size
+                min_side_img = min(w, h)
+
+            crop_size = max(1024, min_side_img)
+            crop_x = w/2 - crop_size/2
+            crop_y = h/2 - crop_size/2
 
         # Crop, resize (only if specified via argument) and save
         im_crop = im.crop((crop_x, crop_y, crop_x + crop_size, crop_y + crop_size))
