@@ -1,0 +1,7 @@
+1) Follow QuickStart guide and launch VM and TPU using
+    ctpu up --zone=us-central1-a  --tf-version=1.15.3 --name=stylegan2 --tpu-size=v3-8
+
+2) Run setup.sh.
+   Updates VM to Python 3.6 and migrate package installs (use requirements_tpu.txt)
+
+3) Ready to use
