@@ -57,12 +57,12 @@ def clean():
             w, h = im.size
             if min(w, h) < args.clean:
                 removed += 1
+                im.close()
                 os.remove(opjoin(image_dir, image_name))
                 continue
 
             # Convert to RGB, save as JPEG
             im = im.convert('RGB')
-            os.remove(opjoin(image_dir, image_name))
             im.save(opjoin(image_dir, image_name), "JPEG")
         except:
             os.remove(opjoin(image_dir, image_name))
@@ -212,13 +212,14 @@ if __name__ == '__main__':
     parser.add_argument('--predict', action='store_true')
     parser.add_argument('--filter', nargs='?', type=float, const=0.9, default=-1.0)
     parser.add_argument('--crop', nargs='?', type=int, const=None, default=-1.0)
-    print(parser)
 
     args = parser.parse_args()
     image_dir = args.image_dir
     pred_dir = os.path.join(image_dir, 'labels')
     supervision_dir = os.path.join(image_dir, 'supervision')
     crop_dir = os.path.join(image_dir, 'crop')
+    if args.crop is not None:
+        crop_dir += f'{crop_dir}_{args.crop}'
 
     print(args)
     if args.clean != -1:
