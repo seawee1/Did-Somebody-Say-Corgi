@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         # Open dataset .csv
         file_name = QFileDialog.getOpenFileName(self, 'Open File')
         self.dataset_path = os.path.dirname(file_name[0])
-        self.df = pd.read_csv(filename[0])
+        self.df = pd.read_csv(file_name[0])
         #pathlib.Path(self.dataset_path, 'labels').mkdir(parents=True, exist_ok=True)
 
         # Add flagged and crop_offset columns
@@ -199,8 +199,11 @@ class MainWindow(QMainWindow):
         # Open image and display
         if new_image:
             self.imagepath = opjoin(self.dataset_path, 'images', self.df.iloc[self.cur_index]['id'])
+            print(self.imagepath)
             if os.path.isfile(self.imagepath + '.jpeg'):
                 self.imagepath += '.jpeg'
+            elif os.path.isfile(self.imagepath + '.jpg'):
+                self.imagepath += '.jpg'
             elif os.path.isfile(self.imagepath + '.png'):
                 self.imagepath += '.png'
             else:
