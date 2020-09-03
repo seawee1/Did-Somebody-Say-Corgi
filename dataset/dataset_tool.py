@@ -9,6 +9,8 @@ from tqdm import tqdm
 import pathlib
 import pickle
 from imagededup.methods import PHash
+import pandas as pd
+import shutil
 
 
 def predict_labels():
@@ -46,7 +48,7 @@ def clean():
     for image_name in image_names:
         basename, ext = get_base_ext(image_name)
 
-        if len(ext) < 2 or ext[1] not in ['jpg', 'jpeg', 'png']:
+        if len(ext) < 2 or ext not in ['jpg', 'jpeg', 'png']:
             os.remove(opjoin(image_dir, image_name))
             removed += 1
             continue
@@ -68,7 +70,12 @@ def clean():
             im.save(opjoin(image_dir, image_name), "JPEG")
         except:
             os.remove(opjoin(image_dir, image_name))
+
+            base, ext = get_base_ext(image_name)
+            if os.isfile(os.path.join(pred_dir, base + '.pkl')):
+                os.remove(os.path.join(prd_dir, base + '.pkl'))
             removed += 1
+
     print(f'Removed {removed} images during cleaning process')
 
 
@@ -101,6 +108,8 @@ def crop():
     # Create crop directory
     pathlib.Path(crop_dir).mkdir(parents=True, exist_ok=True)
     pathlib.Path(supervision_dir).mkdir(parents=True, exist_ok=True)
+
+    center_crops = 0
     for image_name in tqdm(image_names):
         basename, ext = get_base_ext(image_name)
 
@@ -179,12 +188,16 @@ def crop():
             crop_x = w/2 - crop_size/2
             crop_y = h/2 - crop_size/2
 
+            center_crops += 1
+
         # Crop, resize (only if specified via argument) and save
         im_crop = im.crop((crop_x, crop_y, crop_x + crop_size, crop_y + crop_size))
         if args.crop is not None:
             im_crop = im_crop.resize((args.crop, args.crop))
         im_crop = im_crop.convert('RGB')
         im_crop.save(os.path.join(crop_dir, image_name), "JPEG")
+
+    print(f'{center_crops} images had no label file and were center cropped')
 
 def remove_duplicates():
     phasher = PHash()
@@ -202,12 +215,84 @@ def remove_duplicates():
         if key in duplicate_keys:
             for dup in duplicates[key]:
                 try:
+                    base, ext = get_base_ext(dup)
+
                     os.remove(os.path.join(image_dir, dup))
+                    if os.isfile(os.path.join(pred_dir, base+'.pkl')):
+                        os.remove(os.path.join(prd_dir, base+'.pkl'))
+
                     duplicate_keys.remove(dup)
                 except:
                     pass
                 removed += 1
     print(f'Removed {removed} duplicates')
+
+def create_dummy_index():
+    image_names = read_image_dir()
+    ids = [get_base_ext(x)[0] for x in image_names]
+    flagged = [False] * len(ids)
+
+    df = pd.DataFrame(list(zip(ids, flagged)),columns=['id', 'flagged'])
+
+    df.to_csv(open(os.path.join(image_dir, 'index.csv'), 'w', encoding='utf-8'), index=False, line_terminator='\n')
+
+def index_to_labels():
+    df = pd.read_csv(os.path.join(image_dir, 'index.csv'))
+    ldir = os.path.join(image_dir, 'labels')
+    idir = os.path.join(image_dir, 'img')
+    pathlib.Path(ldir).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(idir).mkdir(parents=True, exist_ok=True)
+
+    for item in df.iterrows():
+        item = item[1]
+        filename = item['id']
+        if item['flagged'] == True:
+            continue
+
+        if os.path.isfile(os.path.join(image_dir, 'images', filename + '.jpg')):
+            filename += '.jpg'
+        elif os.path.isfile(os.path.join(image_dir, 'images', filename + '.jpeg')):
+            filename += '.jpeg'
+        elif os.path.isfile(os.path.join(image_dir, 'images', filename + '.png')):
+            filename += '.png'
+        else:
+            print(filename)
+
+        bbox = np.array([[item['bboxX'], item['bboxY'], item['bboxX'] + item['bboxSize'], item['bboxY'] + item['bboxSize']]])
+        labels = np.array([18])
+        scores = np.array([1.0])
+        label_dict = {'boxes': bbox, 'labels': labels, 'scores': scores}
+
+        basename, ext = get_base_ext(filename)
+
+        pickle.dump(label_dict, open(os.path.join(ldir, basename + '.pkl'), 'wb'))
+        shutil.copyfile(os.path.join(image_dir, 'images', filename), os.path.join(idir, filename))
+
+def rename():
+    image_names = read_image_dir()
+    image_dir_tmp = os.path.join(image_dir, 'tmp')
+    pred_dir_tmp = os.path.join(image_dir, 'pred_dir_tmp')
+
+    pathlib.Path(image_dir_tmp).mkdir(parents=True, exist_ok=True)
+    #pathlib.Path(pred_dir_tmp).mkdir(parents=True, exist_ok=True)
+
+    if os.path.isdir(pred_dir):
+        os.rename(pred_dir, pred_dir_tmp)
+
+    pathlib.Path(pred_dir).mkdir(parents=True, exist_ok=True)
+    for image_name in tqdm(image_names):
+        os.rename(os.path.join(image_dir, image_name), os.path.join(image_dir_tmp, image_name))
+
+    counter = 0
+    for image_name in tqdm(image_names):
+        base, ext = get_base_ext(image_name)
+        os.rename(os.path.join(image_dir_tmp, image_name), os.path.join(image_dir, f'{counter}.{ext}'))
+        os.rename(os.path.join(pred_dir_tmp, base + '.pkl'), os.path.join(pred_dir, f'{counter}.pkl'))
+        counter += 1
+
+    os.remove(image_dir_tmp)
+    os.remove(pred_dir_tmp)
+
 
 def read_image_dir():
     image_names = [x for x in os.listdir(image_dir) if not os.path.isdir(opjoin(image_dir, x))]
@@ -225,13 +310,16 @@ def get_base_ext(file_name):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='stylegan2 dataset tool.')
+    parser = argparse.ArgumentParser(description='StyleGAN2 dataset tool.')
     parser.add_argument('image_dir')
-    parser.add_argument('--clean', nargs='?', type=int, const=700, default=-1)
-    parser.add_argument('--remove-duplicates', action='store_true')
-    parser.add_argument('--predict', action='store_true')
-    parser.add_argument('--filter', nargs='?', type=float, const=0.9, default=-1.0)
-    parser.add_argument('--crop', nargs='?', type=int, const=None, default=-1.0)
+    parser.add_argument('--clean', nargs='?', type=int, const=700, default=-1, help='Removes damaged image files and convertes healty ones to RGB JPEG. Also removes images with shorter length < [arg] (default=700).')
+    parser.add_argument('--remove-duplicates', action='store_true', help='Removes duplicate images using Perceptual Hashing method.')
+    parser.add_argument('--predict', action='store_true', help='Predicts corgi bounding boxes using pre-trained COCO Faster R-CNN and saves them into image_dir/labels.')
+    parser.add_argument('--filter', nargs='?', type=float, const=0.9, default=-1.0, help='Moves all images with more than one dog bounding box to image_dir/supervision.')
+    parser.add_argument('--crop', nargs='?', type=int, const=None, default=-1.0, help='Crops images based on predicted bounding box to quadratic image. You can specify target size via [arg] (default=do not resize).')
+    parser.add_argument('--rename', action='store_true', help='Renames images and prediction files to [1,2,3,4,...,num_images].')
+    parser.add_argument('--create-dummy-index', action='store_true', help='Create dummy .csv for annot_tool.py.')
+    parser.add_argument('--index-to-labels', action='store_true', help='Creates prediction .pkl from index.csv.')
 
     args = parser.parse_args()
     image_dir = args.image_dir
@@ -241,14 +329,23 @@ if __name__ == '__main__':
     if args.crop is not None:
         crop_dir = os.path.join(image_dir, f'crop_{args.crop}')
 
-    print(args)
+    if args.create_dummy_index:
+        create_dummy_index()
+    elif args.index_to_labels:
+        index_to_labels()
+
+    if args.rename:
+        rename()
+
     if args.clean != -1:
         clean()
     if args.predict:
         predict_labels()
+
     if args.crop != -1.0:
         crop()
     elif args.filter != -1.0:
         filter()
+
     if args.remove_duplicates:
         remove_duplicates()
