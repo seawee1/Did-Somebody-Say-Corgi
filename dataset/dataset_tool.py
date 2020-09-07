@@ -120,6 +120,9 @@ def crop():
                 # Calculate longer side of bbox
                 crop_size = max(w_bbox, h_bbox)
 
+                if crop_size > min(w, h):
+                    crop_size = min(w,h)
+
                 # Skip, because we only do 2x and 4x super resolution
                 if crop_size < 256:
                     skipped += 1
