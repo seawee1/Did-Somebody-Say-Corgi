@@ -1,45 +1,33 @@
 import argparse
-import torchvision
 import os
 from os.path import join as opjoin
 import numpy as np
 from PIL import Image, ImageDraw
-from torchvision.transforms import ToTensor
 from tqdm import tqdm
 import pathlib
 import pickle
-from imagededup.methods import PHash
+#from imagededup.methods import PHash
 import pandas as pd
 import shutil
 
+def parse_prediction_file(prediction_path):
+    with open(prediction_path, 'r') as f:
+        content = f.read()
+    lines = content.split('\n')
+    predictions = []
+    for line in lines:
+        split = line.split(' ')
+        if len(line) == 0: break
+        pred_dict = {
+            'cls': int(split[0]),
+            'x': float(split[1]),
+            'y': float(split[2]),
+            'w': float(split[3]),
+            'h': float(split[4])
+        }
+        predictions.append(pred_dict)
 
-def predict_labels():
-    image_names = read_image_dir()
-
-    # Load model
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-    model.eval()
-
-    # Create label directory
-    pathlib.Path(pred_dir).mkdir(parents=True, exist_ok=True)
-
-    for image_name in tqdm(image_names):
-        basename, ext = get_base_ext(image_name)
-
-        if ext not in ['jpg', 'jpeg', 'png']:
-            continue
-
-        # Predict
-        image = Image.open(os.path.join(image_dir, image_name))
-        image_tensor = ToTensor()(image).unsqueeze(0)
-        predictions = model(image_tensor)[0]
-
-        # Cast to numpy
-        for key, value in predictions.items():
-            predictions[key] = value.detach().numpy()
-
-        # Dump dict into label folder
-        pickle.dump(predictions, open(opjoin(pred_dir, image_name.split('.')[0] + '.pkl'), "wb"))
+    return predictions
 
 def clean():
     image_names = read_image_dir()
@@ -57,23 +45,17 @@ def clean():
         try:
             im = Image.open(opjoin(image_dir, image_name))
 
-            # Check resolution
-            w, h = im.size
-            if min(w, h) < args.clean:
-                removed += 1
-                im.close()
-                os.remove(opjoin(image_dir, image_name))
-                continue
-
             # Convert to RGB, save as JPEG
             im = im.convert('RGB')
             im.save(opjoin(image_dir, image_name), "JPEG")
         except:
+            # Remove image
             os.remove(opjoin(image_dir, image_name))
 
+            # Remove prediction file
             base, ext = get_base_ext(image_name)
-            if os.isfile(os.path.join(pred_dir, base + '.pkl')):
-                os.remove(os.path.join(prd_dir, base + '.pkl'))
+            if os.isfile(os.path.join(pred_dir, base + '.txt')):
+                os.remove(os.path.join(pred_dir, base + '.txt'))
             removed += 1
 
     print(f'Removed {removed} images during cleaning process')
@@ -90,74 +72,62 @@ def filter():
         basename, ext = get_base_ext(image_name)
 
         # Load prediction
-        prediction = pickle.load(open(os.path.join(pred_dir, basename + '.pkl'), 'rb'))
-
-        # Find predictions > probability threshold
-        idxs = np.argwhere((prediction['labels'] == 18) & (prediction['scores'] > args.filter)).flatten()
+        predictions = parse_prediction_file(os.path.join(pred_dir, basename + '.txt'))
 
         # If unequal to 1, supervision is needed
-        if len(idxs) != 1:
+        if len(predictions) != 1:
             os.rename(opjoin(image_dir, image_name), opjoin(supervision_dir, image_name))
             supervisions += 1
 
-    print(f'For {supervisions} images supervision is needed... Check supervision subfolder')
+    print(f'For {supervisions} images supervision is needed... Check supervision subfolder!')
 
 def crop():
     image_names = read_image_dir()
 
     # Create crop directory
-    pathlib.Path(crop_dir).mkdir(parents=True, exist_ok=True)
-    pathlib.Path(supervision_dir).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(crop_dir_256).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(crop_dir_512).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(crop_dir_1024).mkdir(parents=True, exist_ok=True)
 
-    center_crops = 0
+    skipped = 0
     for image_name in tqdm(image_names):
         basename, ext = get_base_ext(image_name)
 
         # Open image
         im = Image.open(opjoin(image_dir, image_name))
-        center_crop = False
+        skip = False
 
-        if os.path.isfile(opjoin(pred_dir, basename + '.pkl')):
+        if os.path.isfile(opjoin(pred_dir, basename + '.txt')):
             # Load prediction
-            prediction = pickle.load(open(opjoin(pred_dir, basename + '.pkl'), 'rb'))
+            predictions = parse_prediction_file(os.path.join(pred_dir, basename + '.txt'))
 
-            # Find predictions > probability threshold
-            p_thresh = 0.9
-            if args.filter != -1.0:
-                p_thresh = args.filter
-            idxs = np.argwhere((prediction['labels'] == 18) & (prediction['scores'] > p_thresh)).flatten()
-
-            # If unequal to 1, supervision is needed. Here we just do a center crop
-            if len(idxs) != 1:
-                center_crop = True
-                #os.rename(opjoin(image_dir, image_name), opjoin(supervision_dir, image_name))
+            if len(predictions) != 1:
+                skip = True
+                skipped += 1
             else:
+                prediction = predictions[0]
+
                 # Image dimensions
                 w, h = im.size
                 min_side_img = min(w, h)
 
-                # Get bbox
-                idx = idxs[0]
-                bbox = prediction['boxes'][idx]
-
-                # Scale to at least 1024 pixels
-                if min_side_img < 1024:
-                    scale_f = 1024 / min_side_img
-                    im = im.resize((int(w * scale_f), int(h * scale_f)))
-                    w, h = im.size
-                    min_side_img = min(w, h)
-                    bbox *= scale_f
+                # BBox
+                x_bbox = round(prediction['x'] * w)
+                y_bbox = round(prediction['y'] * h)
+                w_bbox = round(prediction['w'] * w)
+                h_bbox = round(prediction['h'] * h)
 
                 # Calculate longer side of bbox
-                max_side_bbox = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]))
+                crop_size = max(w_bbox, h_bbox)
 
-                # Ensure that crop is at least 1024, fits into image and,
-                # if possible, has size max_side_bbox + max_size_img/10
-                crop_size = min(min_side_img, max(1024, max_side_bbox + min_side_img / 10))
+                # Skip, because we only do 2x and 4x super resolution
+                if crop_size < 256:
+                    skipped += 1
+                    continue
 
                 # Try to center crop around bbox center
-                bbox_center_x = bbox[0] + (bbox[2] - bbox[0]) / 2
-                bbox_center_y = bbox[1] + (bbox[3] - bbox[1]) / 2
+                bbox_center_x = x_bbox + w_bbox / 2
+                bbox_center_y = y_bbox + h_bbox / 2
                 crop_x = max(0, bbox_center_x - crop_size / 2)
                 crop_y = max(0, bbox_center_y - crop_size / 2)
 
@@ -169,35 +139,23 @@ def crop():
                 if crop_y_over < 0:
                     crop_y += crop_y_over
 
+                # Crop and save based on crop size
+                im_crop = im.crop((crop_x, crop_y, crop_x + crop_size, crop_y + crop_size))
+                im_crop = im_crop.convert('RGB')
+
+                if crop_size >= 256 and crop_size < 512:
+                    crop_dir = crop_dir_256
+                elif crop_size >= 512 and crop_size < 1024:
+                    crop_dir = crop_dir_512
+                else:
+                    crop_dir = crop_dir_1024
+
+                im_crop.save(os.path.join(crop_dir, image_name), "JPEG")
+
         else:
-            center_crop = True
+            skip = True
 
-        if center_crop:
-            # Image dimensions
-            w, h = im.size
-            min_side_img = min(w, h)
-
-            # Scale to at least 1024 pixels
-            if min_side_img < 1024:
-                scale_f = 1024/min_side_img
-                im = im.resize((int(w * scale_f), int(h * scale_f)))
-                w, h = im.size
-                min_side_img = min(w, h)
-
-            crop_size = max(1024, min_side_img)
-            crop_x = w/2 - crop_size/2
-            crop_y = h/2 - crop_size/2
-
-            center_crops += 1
-
-        # Crop, resize (only if specified via argument) and save
-        im_crop = im.crop((crop_x, crop_y, crop_x + crop_size, crop_y + crop_size))
-        if args.crop is not None:
-            im_crop = im_crop.resize((args.crop, args.crop))
-        im_crop = im_crop.convert('RGB')
-        im_crop.save(os.path.join(crop_dir, image_name), "JPEG")
-
-    print(f'{center_crops} images had no label file and were center cropped')
+    print(f'Skipped {skipped} images, because crop was too small or other reasons.')
 
 def remove_duplicates():
     phasher = PHash()
@@ -293,6 +251,18 @@ def rename():
     os.remove(image_dir_tmp)
     os.remove(pred_dir_tmp)
 
+def resize():
+    image_names = read_image_dir()
+    for image_name in tqdm(image_names):
+        image = Image.open(os.path.join(image_dir, image_name))
+
+        w, h = image.size
+        if w == args.resize:
+            continue
+
+        image = image.resize((args.resize, args.resize))
+        image.save(os.path.join(image_dir, image_name))
+
 
 def read_image_dir():
     image_names = [x for x in os.listdir(image_dir) if not os.path.isdir(opjoin(image_dir, x))]
@@ -312,40 +282,39 @@ def get_base_ext(file_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='StyleGAN2 dataset tool.')
     parser.add_argument('image_dir')
-    parser.add_argument('--clean', nargs='?', type=int, const=700, default=-1, help='Removes damaged image files and convertes healty ones to RGB JPEG. Also removes images with shorter length < [arg] (default=700).')
+    parser.add_argument('--clean', action='store_true', help='Removes damaged image files and convertes healty ones to RGB JPEG.')
     parser.add_argument('--remove-duplicates', action='store_true', help='Removes duplicate images using Perceptual Hashing method.')
-    parser.add_argument('--predict', action='store_true', help='Predicts corgi bounding boxes using pre-trained COCO Faster R-CNN and saves them into image_dir/labels.')
-    parser.add_argument('--filter', nargs='?', type=float, const=0.9, default=-1.0, help='Moves all images with more than one dog bounding box to image_dir/supervision.')
-    parser.add_argument('--crop', nargs='?', type=int, const=None, default=-1.0, help='Crops images based on predicted bounding box to quadratic image. You can specify target size via [arg] (default=do not resize).')
+    parser.add_argument('--filter', action='store_true', help='Moves all images with more than one bounding box to image_dir/supervision.')
+    parser.add_argument('--crop', action='store_true', help='Crops images based on predicted bounding box to quadratic image. ')
     parser.add_argument('--rename', action='store_true', help='Renames images and prediction files to [1,2,3,4,...,num_images].')
+    parser.add_argument('--resize', type=int, default=-1, help='Resizes images in folder to [arg] pixel size.')
+
     parser.add_argument('--create-dummy-index', action='store_true', help='Create dummy .csv for annot_tool.py.')
     parser.add_argument('--index-to-labels', action='store_true', help='Creates prediction .pkl from index.csv.')
 
     args = parser.parse_args()
+
     image_dir = args.image_dir
     pred_dir = os.path.join(image_dir, 'labels')
     supervision_dir = os.path.join(image_dir, 'supervision')
-    crop_dir = os.path.join(image_dir, 'crop')
-    if args.crop is not None:
-        crop_dir = os.path.join(image_dir, f'crop_{args.crop}')
+    crop_dir_256 = os.path.join(image_dir, 'crop256')
+    crop_dir_512 = os.path.join(image_dir, 'crop512')
+    crop_dir_1024 = os.path.join(image_dir, 'crop1024')
 
-    if args.create_dummy_index:
+    if args.clean:
+        clean()
+    elif args.remove_duplicates:
+        remove_duplicates()
+    elif args.filter:
+        filter()
+    elif args.crop:
+        crop()
+    elif args.rename:
+        rename()
+    elif args.resize > 0:
+        resize()
+    elif args.create_dummy_index:
         create_dummy_index()
     elif args.index_to_labels:
         index_to_labels()
 
-    if args.rename:
-        rename()
-
-    if args.clean != -1:
-        clean()
-    if args.predict:
-        predict_labels()
-
-    if args.crop != -1.0:
-        crop()
-    elif args.filter != -1.0:
-        filter()
-
-    if args.remove_duplicates:
-        remove_duplicates()
