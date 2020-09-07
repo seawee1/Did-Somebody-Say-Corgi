@@ -106,7 +106,6 @@ def crop():
                 skipped += 1
             else:
                 prediction = predictions[0]
-                print(prediction)
 
                 # Image dimensions
                 w, h = im.size
@@ -117,7 +116,6 @@ def crop():
                 y_bbox = round(prediction['y'] * h)
                 w_bbox = round(prediction['w'] * w)
                 h_bbox = round(prediction['h'] * h)
-                print(x_bbox, y_bbox, w_bbox, h_bbox)
 
                 # Calculate longer side of bbox
                 crop_size = max(w_bbox, h_bbox)
