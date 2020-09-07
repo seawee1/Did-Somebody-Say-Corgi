@@ -106,6 +106,7 @@ def crop():
                 skipped += 1
             else:
                 prediction = predictions[0]
+                print(prediction)
 
                 # Image dimensions
                 w, h = im.size
@@ -116,6 +117,7 @@ def crop():
                 y_bbox = round(prediction['y'] * h)
                 w_bbox = round(prediction['w'] * w)
                 h_bbox = round(prediction['h'] * h)
+                print(x_bbox, y_bbox, w_bbox, h_bbox)
 
                 # Calculate longer side of bbox
                 crop_size = max(w_bbox, h_bbox)
@@ -129,10 +131,8 @@ def crop():
                     continue
 
                 # Try to center crop around bbox center
-                bbox_center_x = x_bbox + w_bbox / 2
-                bbox_center_y = y_bbox + h_bbox / 2
-                crop_x = max(0, bbox_center_x - crop_size / 2)
-                crop_y = max(0, bbox_center_y - crop_size / 2)
+                crop_x = max(0, x_bbox - crop_size / 2)
+                crop_y = max(0, y_bbox - crop_size / 2)
 
                 # Adjust in case the bbox is partially outside the image
                 crop_x_over = w - (crop_x + crop_size)
