@@ -109,7 +109,7 @@ def calculate_crop_box(w, h, prediction, target_res, min_res, min_cover):
     # Image is too small
     min_side_image = min(w, h)
     if min_side_image < min_res:
-        return None, None, None, None, None, None
+        return None
 
     # Convert relative to pixel value bounding box
     x_bbox_center = round(prediction['x'] * w)
@@ -134,7 +134,7 @@ def calculate_crop_box(w, h, prediction, target_res, min_res, min_cover):
     if crop_box_cover < min_cover:
         # Coverage can't be reached
         if crop_box_max_cover < min_cover:
-            return None, None, None, None, None, None
+            return None
 
         # Iteratively reduce crop size and check coverage
         num_steps = 10
@@ -145,7 +145,7 @@ def calculate_crop_box(w, h, prediction, target_res, min_res, min_cover):
 
             # We don't want such training images, because the object is too thin to be cropped using this method
             if crop_box_size < w_bbox or crop_box_size < h_bbox:
-                return None, None, None, None, None, None
+                return None
 
             if crop_box_cover >= min_cover:
                 break
@@ -171,19 +171,25 @@ def calculate_crop_box(w, h, prediction, target_res, min_res, min_cover):
         [x_bbox, y_bbox, x_bbox + w_bbox, y_bbox + h_bbox]
     )[0] >= min_cover
 
-    crop_box_dict = {
-        'x': (crop_x + round(crop_box_size/2))/w,
-        'y': (crop_y + round(crop_box_size/2))/h,
-        'w': crop_box_size/w,
-        'h': crop_box_size/h
-    }
 
     center_shift = (
         (crop_x + round(crop_box_size/2) - x_bbox_center)/w,
         (crop_y + round(crop_box_size/2) - y_bbox_center)/h
     )
 
-    return crop_box_dict, center_shift, crop_box_size, crop_box_cover, crop_box_max_cover, is_partial_crop
+    crop_box_dict = {
+        'x': (crop_x + round(crop_box_size/2))/w,
+        'y': (crop_y + round(crop_box_size/2))/h,
+        'w': crop_box_size/w,
+        'h': crop_box_size/h,
+        'crop_size': crop_box_size,
+        'crop_cover': crop_box_cover,
+        'center_shift': center_shift,
+        'is_partial': is_partial_crop,
+        'size': (w, h)
+    }
+
+    return crop_box_dict
 
 '''
 import random
@@ -220,12 +226,12 @@ for i, idx in enumerate(sample_idx):
     crop_box, center_shift, crop_box_size, crop_box_cover, is_partial_crop = calculate_crop_box(w, h,
                                                                                                              prediction_lst[
                                                                                                                  i],
-                                                                                                             1024, 0,
+                                                                                                             1024, 1,
                                                                                                              0.0)
     labels.append(f'{crop_box_size}, {center_shift}, {crop_box_cover}, {is_partial_crop}')
     sample_idx.append(idx)
-
 '''
+
 
 def crop(image_dir, pred_dir, crop_dir, supervision_dir, target_res, min_cover, min_res, max_shift):
     image_names = read_image_dir(image_dir)
