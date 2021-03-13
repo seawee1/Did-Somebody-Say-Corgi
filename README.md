@@ -52,6 +52,6 @@ This reduced the dataset to 136255 high quality corgi images. For more details h
 
 ### Model Training
 
-The rest was easy. I first experimented with training the model on TPUs provided by the [Tensorflow Research Cloud (TFRC)](https://www.tensorflow.org/tfrc). In my case just didn't work (I know other StyleGAN projects which successfully did this using the same repositories as I did), because training speed was much to slow. That's when I got myself a Google Colab Pro subscription and trained the StyleGAN2 model for 18 days on a Tesla V100. This however does not include a lot of days where something went wrong and nothing progressed. Overall I was occupied with starting Colab runtimes every day for ~1 month. 
+The rest was easy. I first experimented with training the model on TPUs provided by the [Tensorflow Research Cloud (TFRC)](https://www.tensorflow.org/tfrc). In my case this just didn't work (but I'm aware other StyleGAN projects which successfully did this using the same repositories as I did), because training speed was much to slow. That's when I got myself a Google Colab Pro subscription and trained the StyleGAN2 model for 18 days on a Tesla V100. This however does not include a lot of days where something went wrong and nothing progressed. Overall I was occupied with starting Colab runtimes every day for ~1 month. 
 
 Have a look at the [train/test notebook](train_test.ipynb) for more details. You can also use this notebook to train your own model! 
