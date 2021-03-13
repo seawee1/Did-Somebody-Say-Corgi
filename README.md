@@ -27,7 +27,7 @@ Because StyleGAN2 usually requires uniform and clean data to achieve good result
 
 - Only one corgi per image
   - For this a [YOLOv3](https://github.com/ultralytics/yolov3) was trained on the [Stanford Dogs Dataset](http://vision.stanford.edu/aditya86/ImageNetDogs/) and used to predict dog bounding boxes on all of the images
-- Should be as centered around the corgi as possible
+- Should be as centered around the corgi as much as possible
   - Filtered by looking at center shift between corgi detection bounding box and square crop window
 - Should fill out a minimum percentage of the image (i.e. should not be too small)
   - In order to artificially increase overlap it was allowed to crop corgis with a crop window as small as 800x800 and upsample the crop to 1024x1024 
