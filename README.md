@@ -16,6 +16,8 @@ A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model train
 - [Model checkpoints](https://drive.google.com/drive/folders/1-7FqNaBC7RNDxWh9-QYedD5NK9LX7KA7?usp=sharing) of the trained StyleGAN2-ADA model
 - Colab notebook to play around with [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1XWU2rR7XHtNg0uEgtlmBAHRVplpX0dGX?usp=sharing)
 
+If you use this repository in your research or a personal project I'd love to hear about it! :)
+
 ## Project Outline
 
 In the following I will give a rough overview about what I did in this project for everyone interested.
