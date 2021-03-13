@@ -58,4 +58,4 @@ Have a look at the [train/test notebook](train_test.ipynb) for more details. You
 
 ## Future Work
 
-The initial plan was to further explore the trained model, e.g. search for meaningful latent space directions and other StyleGAN related methods proposed in recent literature. If anybody come about to this please contact me. I'd be very interested in the results! :)
+The initial plan was to further explore the trained model, e.g. search for meaningful latent space directions and other StyleGAN related methods proposed in recent literature. If anybody comes about to this I'd be happy to hear from you. I'd be very interested to see those results! :)
