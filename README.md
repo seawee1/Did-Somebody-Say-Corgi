@@ -4,9 +4,7 @@ A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model train
 
 ![Final model results](images/fakes.jpg)
 
-https://user-images.githubusercontent.com/45483347/111032204-588bdd80-840b-11eb-8e4c-5a780a7f072e.mp4
-
-
+[![Watch the video](https://user-images.githubusercontent.com/45483347/111032204-588bdd80-840b-11eb-8e4c-5a780a7f072e.mp4)](https://user-images.githubusercontent.com/45483347/111032204-588bdd80-840b-11eb-8e4c-5a780a7f072e.mp4)
 
 
 **This repository features:**
