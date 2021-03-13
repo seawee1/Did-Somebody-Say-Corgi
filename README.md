@@ -1,10 +1,11 @@
-
-
 # Did Somebody Say Corgi?
 
 A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model trained on corgi images found on Instagram.
 
 ![Final model results](images/fakes.jpg)
+
+https://user-images.githubusercontent.com/45483347/111032204-588bdd80-840b-11eb-8e4c-5a780a7f072e.mp4
+
 
 
 
