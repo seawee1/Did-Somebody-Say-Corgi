@@ -30,7 +30,7 @@ Because StyleGAN2 usually requires uniform and clean data to achieve good result
 - Should be as centered around the corgi as much as possible
   - Filtered by looking at center shift between corgi detection bounding box and square crop window
 - Should fill out a minimum percentage of the image (i.e. should not be too small)
-  - In order to artificially increase overlap it was allowed to crop corgis with a crop window as small as 800x800 and upsample the crop to 1024x1024 
+  - In order to artificially increase overlap I allowed the cropping algorithm to use a crop window as small as 800x800 and upsample the crop to 1024x1024 from there.
 - No duplicates (using [imgdupes](https://github.com/knjcode/imgdupes))
 
 This reduced the dataset to 136255 high quality corgi images. For more details have a look at the [dataset notebook](dataset.ipynb).
