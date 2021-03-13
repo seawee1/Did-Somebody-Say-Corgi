@@ -38,13 +38,13 @@ This reduced the dataset to 136255 high quality corgi images. For more details h
 
 **Good samples**
 
-<img src="images/preproc3.png" width="200"/><img src="images/preproc4.png" width="200"/><img src="images/preproc5.png" width="200"/>
+<img src="images/preproc3.png" width="250"/><img src="images/preproc4.png" width="250"/><img src="images/preproc5.png" width="250"/>
 
 
 
 **Bad samples**
 
-<img src="images/preproc1.png" width="200"/><img src="images/preproc2.png" width="200"/><img src="images/preproc6.png" width="200"/>
+<img src="images/preproc1.png" width="250"/><img src="images/preproc2.png" width="250"/><img src="images/preproc6.png" width="250"/>
 
 
 
