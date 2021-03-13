@@ -34,7 +34,7 @@ Because StyleGAN2 usually requires uniform and clean data to achieve good result
   - In order to artificially increase overlap I allowed the cropping algorithm to use a crop window as small as 800x800 and upsample the crop to 1024x1024 from there.
 - No duplicates (using [imgdupes](https://github.com/knjcode/imgdupes))
 
-This reduced the dataset to 136255 high quality corgi images. For more details have a look at the [dataset notebook](dataset.ipynb).
+This reduced the dataset to 136255 high-quality 1024x1024 corgi images. For more details have a look at the [dataset notebook](dataset.ipynb).
 
 
 
