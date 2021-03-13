@@ -3,6 +3,7 @@
 
 A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model trained on corgi images found on Instagram.
 
+**Training Images**
 ![Final model results](images/fakes.jpg)
 
 [![Watch the video](https://user-images.githubusercontent.com/45483347/111032341-fa132f00-840b-11eb-869a-b1c4afe44b19.mp4
