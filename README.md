@@ -58,4 +58,4 @@ Have a look at the [train/test notebook](train_test.ipynb) for more details. You
 
 ## Future Work
 
-The initial plan was to further explore the trained model, e.g. search for meaningful latent space directions and other StyleGAN related methods proposed in recent literature. If anybody comes about to this I'd be happy to hear from you. I imagine the corgi latent space to have some funny characteristics.
+The initial plan was to further explore the trained model, e.g. search for meaningful latent space directions and other StyleGAN related methods proposed in recent literature. If anybody comes about to do this I'd be happy to hear from you. I imagine the corgi latent space to have some funny characteristics.
