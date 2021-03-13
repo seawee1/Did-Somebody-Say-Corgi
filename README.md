@@ -13,7 +13,7 @@ A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model train
 **This repository features:**
 
 - A [high-quality dataset](https://drive.google.com/file/d/1WDLf-fhamq0gl3RsAdx4twDyilpW-Mq9/view?usp=sharing) of ~130k corgi images
-- [Model checkpoints](https://drive.google.com/drive/folders/1-7FqNaBC7RNDxWh9-QYedD5NK9LX7KA7?usp=sharing) of the trained StyleGAN2 model
+- [Model checkpoints](https://drive.google.com/drive/folders/1-7FqNaBC7RNDxWh9-QYedD5NK9LX7KA7?usp=sharing) of the trained StyleGAN2-ADA model
 - Colab notebook to play around with [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1XWU2rR7XHtNg0uEgtlmBAHRVplpX0dGX?usp=sharing)
 
 ## Project Outline
