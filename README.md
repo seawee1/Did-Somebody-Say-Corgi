@@ -21,7 +21,7 @@ In the following I will give a rough overview about what I did in this project f
 
 ### Dataset Creation
 
-After I made the decision that it would be a great project to train a StyleGAN2 model on images of corgis (I can't exactly remember why though haha) I first searched the internet for a preexisting high-resolution corgi image dataset. Suprisingly (not really) I wasn't able to find any, so I had to create my own dataset. After some experiments I decided that I could probably get more then enough corgi images of Instagram. I started with scrapping 350000 corgi images from instagram.
+After I made the decision that it would be a great project to train a StyleGAN2 model on images of corgis (I can't exactly remember why though haha) I first searched the internet for a preexisting high-resolution corgi image dataset. Suprisingly (not really) I wasn't able to find any, so I had to create my own dataset. After some experiments I decided that I could probably get more than enough corgi images of Instagram. I started with scrapping 350000 corgi images as an initial data base.
 
 Because StyleGAN2 usually requires uniform and clean data to achieve good results I then performed some heuristic-based preprocessing on the initial dataset. My filtering criteria were:
 
