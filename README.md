@@ -10,6 +10,11 @@ A 1024x1024 [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada) model train
 )](https://user-images.githubusercontent.com/45483347/111032341-fa132f00-840b-11eb-869a-b1c4afe44b19.mp4)
 
 
+[![Thread on /r/MachineLearning](https://www.reddit.com/r/MachineLearning/comments/m47an8/p_stylegan2ada_trained_on_cute_corgi_images_3/
+)](https://www.reddit.com/r/MachineLearning/comments/m47an8/p_stylegan2ada_trained_on_cute_corgi_images_3/)
+
+
+
 **This repository features:**
 
 - A [high-quality dataset](https://drive.google.com/file/d/1WDLf-fhamq0gl3RsAdx4twDyilpW-Mq9/view?usp=sharing) of ~130k corgi images
