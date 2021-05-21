@@ -99,7 +99,7 @@ six==1.15.0
 sympy==1.6
 tensor2tensor==1.14.0
 tensorboard==1.15.0
-tensorflow==1.15.4
+tensorflow==2.5.0
 tensorflow-datasets==1.2.0
 tensorflow-estimator==1.15.1
 tensorflow-gan==2.0.0
